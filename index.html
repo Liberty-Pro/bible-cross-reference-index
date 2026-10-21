@@ -74,6 +74,7 @@ td:first-child{font:600 13px var(--f-body)}
 .vref{font:600 20px/1.1 var(--f-display)}
 .vref a{text-decoration:none}
 .vref a:hover{text-decoration:underline}
+.vcount{display:block;width:fit-content;margin-top:7px;padding:1px 8px;border-radius:999px;font:500 11px/1.5 var(--f-mono);color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
 .vref small{display:block;font:400 11px var(--f-body);margin-top:6px}
 .vref small a{color:var(--muted)}
 .chips{display:flex;flex-wrap:wrap;gap:6px;min-width:0}
@@ -294,7 +295,7 @@ function renderVerses(){
       const lab=refLabel(tci,tv,end);
       return `<a class="chip ${votes<0?'neg':''}" style="--c:${SEC_COL(M.secof[tb])}" href="${bg(lab)}" data-src="${ref}" data-ref="${lab}" data-ssp="${ci},${v},${ci},${v}" data-tsp="${tci},${tv},${end?Math.floor(end/1000):tci},${end?end%1000:tv}" target="_blank" rel="noopener noreferrer" title="${votes} votes">${lab}<i>${votes}</i></a>`;
     }).join('');
-    h+=`<div class="verse ${v===st.hit?'hit':''}" id="v${v}"><div class="vref"><a href="${bg(ref)}" target="_blank" rel="noopener noreferrer">${c}:${v}</a><small><a href="${ob(ref)}" target="_blank" rel="noopener noreferrer">OpenBible ↗</a></small></div><div class="vbody"><p class="vtext" data-v="${v}"></p><div class="chips">${chips}</div></div></div>`;
+    h+=`<div class="verse ${v===st.hit?'hit':''}" id="v${v}"><div class="vref"><a href="${bg(ref)}" target="_blank" rel="noopener noreferrer">${c}:${v}</a><span class="vcount" title="${list.length} cross-reference${list.length===1?'':'s'} shown for this verse">${list.length} ${list.length===1?'ref':'refs'}</span><small><a href="${ob(ref)}" target="_blank" rel="noopener noreferrer">OpenBible ↗</a></small></div><div class="vbody"><p class="vtext" data-v="${v}"></p><div class="chips">${chips}</div></div></div>`;
   }
   $('verses').innerHTML=h||`<div class="empty-state">No references match these filters in this chapter.</div>`;
   $('shown').textContent=`${fmt(shown)} references · ${fmt(groups.size)} verses shown`;
