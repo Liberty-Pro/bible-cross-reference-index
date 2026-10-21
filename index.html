@@ -124,6 +124,12 @@ body{background:radial-gradient(1200px 500px at 15% -10%,color-mix(in srgb,var(-
 .card .bar{height:4px;border-radius:2px;background:var(--panel2);margin-top:10px;overflow:hidden}
 .card .bar i{display:block;height:100%;background:var(--c);border-radius:2px}
 .stats>div{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 18px}
+.chead{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;justify-content:space-between}
+.ctr{color:var(--muted);font-size:13px}
+.ctr select{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:4px 6px}
+.vbody{min-width:0}
+.vtext{margin:0 0 10px;font:400 17px/1.5 var(--f-display)}
+.vtext:empty{display:none}
 dialog#pv{width:min(900px,calc(100vw - 24px));max-height:88vh;overflow:auto;border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--fg);padding:18px 20px;box-shadow:0 24px 60px rgba(0,0,0,.35)}
 dialog#pv::backdrop{background:rgba(10,14,22,.55);backdrop-filter:blur(3px)}
 .pvhead{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin:0 0 14px}
@@ -254,7 +260,7 @@ function showChapter(ci,hitVerse){
   try{history.replaceState(null,'',`#${M.books[b]}.${c}`)}catch(e){}
   const crumbs=[];for(let k=M.cs[b];k<M.cs[b+1];k++)crumbs.push(`<button data-ci="${k}" ${k===ci?'aria-current="true"':''} class="${chapRefCount[k]?'':'empty'}" title="${fmt(chapRefCount[k])} references">${k-M.cs[b]+1}</button>`);
   const legend=M.secnames.map((s,i)=>`<span><span class="dot" style="background:${SEC_COL(i)}"></span>${s}</span>`).join('');
-  $('main').innerHTML=`<h2>${M.names[b]} ${c}</h2><p class="sub" id="cnt"></p>
+  $('main').innerHTML=`<div class="chead"><h2>${M.names[b]} ${c}</h2><label class="ctr">Translation <select id="cTr"><option value="web">World English Bible</option><option value="kjv">King James Version</option><option value="drb">Douay-Rheims (Catholic)</option></select></label></div><p class="sub" id="cnt"></p>
   <div class="crumbs" aria-label="Chapters">${crumbs.join('')}</div>
   <div class="filters">
     <label>Min votes <select id="fMin"><option value="all">All</option><option value="1">1+</option><option value="5">5+</option><option value="20">20+</option><option value="50">50+</option></select></label>
@@ -266,7 +272,7 @@ function showChapter(ci,hitVerse){
   <div class="legend">Link color = where the reference points: ${legend}</div>
   <div class="pager"><button class="btn" id="prevC">← Previous chapter</button><button class="btn" id="nextC">Next chapter →</button></div>
   <div id="verses"></div>`;
-  $('fMin').value=st.min;$('fSec').value=st.sec;$('fSort').value=st.sort;$('fOT').checked=st.otnt;
+  $('cTr').value=pv.tr;$('fMin').value=st.min;$('fSec').value=st.sec;$('fSort').value=st.sort;$('fOT').checked=st.otnt;
   $('prevC').disabled=ci===0;$('nextC').disabled=ci===1188;
   renderVerses();
 }
@@ -288,11 +294,12 @@ function renderVerses(){
       const lab=refLabel(tci,tv,end);
       return `<a class="chip ${votes<0?'neg':''}" style="--c:${SEC_COL(M.secof[tb])}" href="${bg(lab)}" data-src="${ref}" data-ref="${lab}" data-ssp="${ci},${v},${ci},${v}" data-tsp="${tci},${tv},${end?Math.floor(end/1000):tci},${end?end%1000:tv}" target="_blank" rel="noopener noreferrer" title="${votes} votes">${lab}<i>${votes}</i></a>`;
     }).join('');
-    h+=`<div class="verse ${v===st.hit?'hit':''}" id="v${v}"><div class="vref"><a href="${bg(ref)}" target="_blank" rel="noopener noreferrer">${c}:${v}</a><small><a href="${ob(ref)}" target="_blank" rel="noopener noreferrer">OpenBible ↗</a></small></div><div class="chips">${chips}</div></div>`;
+    h+=`<div class="verse ${v===st.hit?'hit':''}" id="v${v}"><div class="vref"><a href="${bg(ref)}" target="_blank" rel="noopener noreferrer">${c}:${v}</a><small><a href="${ob(ref)}" target="_blank" rel="noopener noreferrer">OpenBible ↗</a></small></div><div class="vbody"><p class="vtext" data-v="${v}"></p><div class="chips">${chips}</div></div></div>`;
   }
   $('verses').innerHTML=h||`<div class="empty-state">No references match these filters in this chapter.</div>`;
   $('shown').textContent=`${fmt(shown)} references · ${fmt(groups.size)} verses shown`;
   $('cnt').textContent=`${fmt(chapRefCount[ci])} references from this chapter`;
+  fillVerseText(ci);
   if(st.hit){const el=$('v'+st.hit); if(el)el.scrollIntoView({block:'center'}); st.hit=0;}
 }
 
@@ -328,18 +335,32 @@ const verseCache=new Map(); let pv={s:null,t:null,tr:'web'};
 try{pv.tr=localStorage.getItem('pvTr')||'web'}catch(e){}
 const TRANS={web:{bg:'ESV'},kjv:{bg:'ESV'},drb:{bg:'DRA',bgName:'Douay-Rheims'}};
 const spec=sp=>{const [ci,v,ec,ev]=sp.split(',').map(Number);return {ci,v,ec,ev}};
-async function fetchBolls(sp){
+const BOLLS={web:'WEB',kjv:'KJV',drb:'DRB'};
+// One request per chapter; bolls.life returns every verse. Strong's tags (<S>1234</S>) and other markup are stripped.
+async function bollsChapter(ci,tr){
+  const key=tr+'|'+ci; let ch=verseCache.get(key);
+  if(!ch){const b=bookOfChap[ci],r=await fetch(`https://bolls.life/get-text/${BOLLS[tr]}/${b+1}/${ci-M.cs[b]+1}/`);
+    if(!r.ok)throw new Error(r.status);
+    ch=(await r.json()).map(v=>({n:v.verse,t:v.text.replace(/<S>.*?<\/S>/g,'').replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim()})); verseCache.set(key,ch)}
+  return ch;
+}
+async function fetchBolls(sp,tr){
   const out=[];
   for(let c=sp.ci;c<=sp.ec;c++){
-    const key='drb|'+c; let ch=verseCache.get(key);
-    if(!ch){const b=bookOfChap[c],r=await fetch(`https://bolls.life/get-text/DRB/${b+1}/${c-M.cs[b]+1}/`);
-      if(!r.ok)throw new Error(r.status); ch=await r.json(); verseCache.set(key,ch)}
-    for(const v of ch){ if((c>sp.ci||v.verse>=sp.v)&&(c<sp.ec||v.verse<=sp.ev))out.push({n:v.verse,t:v.text.replace(/<[^>]+>/g,'').trim()}) }
+    for(const v of await bollsChapter(c,tr)){ if((c>sp.ci||v.n>=sp.v)&&(c<sp.ec||v.n<=sp.ev))out.push(v) }
   }
   if(!out.length)throw new Error('empty'); return out;
 }
+// Fills the verse-text line above each verse's references in the chapter view.
+async function fillVerseText(ci){
+  const tr=pv.tr; let ch;
+  try{ch=await bollsChapter(ci,tr)}catch(e){return}
+  if(st.ci!==ci||pv.tr!==tr)return;
+  const map=new Map(ch.map(x=>[x.n,x.t]));
+  document.querySelectorAll('.vtext').forEach(el=>{el.textContent=map.get(+el.dataset.v)||''});
+}
 async function fetchPassage(label,sp,tr){
-  if(tr==='drb')return fetchBolls(sp);
+  if(tr==='drb')return fetchBolls(sp,tr);
   const key=tr+'|'+label; if(verseCache.has(key))return verseCache.get(key);
   const r=await fetch(`https://bible-api.com/${encodeURIComponent(label.replace(/–/g,"-"))}?translation=${tr}`);
   if(!r.ok)throw new Error(r.status); const j=await r.json();
@@ -364,6 +385,7 @@ document.addEventListener('click',e=>{
   e.preventDefault(); openPassage({label:a.dataset.src,sp:spec(a.dataset.ssp)},{label:a.dataset.ref,sp:spec(a.dataset.tsp)});
 });
 document.addEventListener('change',e=>{
+  if(e.target.id==='cTr'){pv.tr=e.target.value;try{localStorage.setItem('pvTr',pv.tr)}catch(_){}fillVerseText(st.ci);return}
   if(e.target.id==='pvTr'){pv.tr=e.target.value;try{localStorage.setItem('pvTr',pv.tr)}catch(_){}openPassage(pv.s,pv.t);return}
 });
 document.addEventListener('change',e=>{
