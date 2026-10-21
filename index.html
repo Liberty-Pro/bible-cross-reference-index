@@ -128,6 +128,12 @@ body{background:radial-gradient(1200px 500px at 15% -10%,color-mix(in srgb,var(-
 .chead{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;justify-content:space-between}
 .ctr{color:var(--muted);font-size:13px}
 .ctr select{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:4px 6px}
+.navdiv{display:flex;align-items:center;gap:10px;margin:18px 0 10px;color:var(--muted);font:600 11px var(--f-body);letter-spacing:1px;text-transform:uppercase}
+.navdiv::before,.navdiv::after{content:"";flex:1;height:1px;background:var(--line)}
+.bookgrid{display:grid;grid-template-columns:1fr 1fr;gap:5px;padding-bottom:20px}
+.bookgrid button{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--c);border-radius:5px;padding:4px 7px;font-size:12.5px;text-align:left;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background .12s,transform .12s}
+.bookgrid button:hover{background:var(--panel2);transform:translateX(2px)}
+.bookgrid button[aria-current="true"]{background:var(--c);color:#fff;border-color:var(--c);font-weight:600}
 .vbody{min-width:0}
 .vtext{margin:0 0 10px;font:400 17px/1.5 var(--f-display)}
 .vtext:empty{display:none}
@@ -201,7 +207,10 @@ function buildNav(){
     for(let b=0;b<66;b++)if(M.secof[b]===si){tot+=M.bookcnt[b];items+=`<button data-book="${b}"><span>${M.names[b]}</span><span class="n">${fmt(M.bookcnt[b])}</span></button>`;}
     h+=`<details class="sec" ${si===0?'open':''}><summary><span class="dot" style="background:${SEC_COL(si)}"></span>${sn}<span class="n">${fmt(tot)}</span></summary><div class="books">${items}</div></details>`;
   });
-  $('nav').innerHTML=`<button class="btn" id="homeBtn" style="width:100%;margin:0 0 10px">Overview</button>`+h;
+  // Flat quick-link list of every book (in canon order), color-keyed by section, below the collapsible sections.
+  let grid='';
+  for(let b=0;b<66;b++)if(M.bookcnt[b]>0)grid+=`<button data-book="${b}" style="--c:${SEC_COL(M.secof[b])}" title="${fmt(M.bookcnt[b])} references">${M.names[b]}</button>`;
+  $('nav').innerHTML=`<button class="btn" id="homeBtn" style="width:100%;margin:0 0 10px">Overview</button>`+h+`<div class="navdiv"><span>All books</span></div><div class="bookgrid">${grid}</div>`;
 }
 
 function showHome(){
@@ -251,7 +260,7 @@ let _rz; addEventListener('resize',()=>{clearTimeout(_rz);_rz=setTimeout(()=>{if
 matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>{if(st.ci===-1)setTimeout(drawArcs,50)});
 
 function markNav(b){
-  document.querySelectorAll('.books button').forEach(x=>x.setAttribute('aria-current',String(+x.dataset.book===b)));
+  document.querySelectorAll('.books button,.bookgrid button').forEach(x=>x.setAttribute('aria-current',String(+x.dataset.book===b)));
 }
 
 function showChapter(ci,hitVerse){
