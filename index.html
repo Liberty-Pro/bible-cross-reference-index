@@ -154,10 +154,10 @@ dialog#pv::backdrop{background:rgba(10,14,22,.55);backdrop-filter:blur(3px)}
 
 <dialog id="pv" aria-label="Passage viewer">
   <div class="pvhead"><b>Read together</b>
-    <label>Translation <select id="pvTr"><option value="web">World English Bible</option><option value="kjv">King James Version</option></select></label>
+    <label>Translation <select id="pvTr"><option value="web">World English Bible</option><option value="kjv">King James Version</option><option value="drb">Douay-Rheims (Catholic)</option></select></label>
     <button class="btn" type="button" onclick="document.getElementById('pv').close()">Close</button></div>
   <div class="pvgrid"><section id="pvA"></section><section id="pvB"></section></div>
-  <p class="note" style="margin:12px 0 0">Text from bible-api.com (public domain). For the ESV, use the BibleGateway links.</p>
+  <p class="note" style="margin:12px 0 0">Text from bible-api.com and bolls.life (public-domain translations only). For the ESV or other versions, use the BibleGateway links. The index covers the 66 books of the Protestant canon, so references into the deuterocanonical books (Tobit, Wisdom, Sirach, 1–2 Maccabees, etc.) are not in this data set.</p>
 </dialog>
 
 <div class="wrap">
@@ -184,7 +184,7 @@ function refLabel(ci,v,end){
     else{const eb=bookOfChap[ec],cc=ec-M.cs[eb]+1; s+=eb===b?`–${cc}:${ev}`:`–${M.names[eb]} ${cc}:${ev}`;}}
   return s;
 }
-const bg=q=>`https://www.biblegateway.com/passage/?search=${encodeURIComponent(q)}&version=ESV`;
+const bg=(q,ver='ESV')=>`https://www.biblegateway.com/passage/?search=${encodeURIComponent(q)}&version=${ver}`;
 const ob=q=>`https://www.openbible.info/labs/cross-references/search?q=${encodeURIComponent(q)}`;
 
 function buildNav(){
@@ -286,7 +286,7 @@ function renderVerses(){
     const ref=`${M.names[b]} ${c}:${v}`;
     const chips=list.map(([tci,tv,end,votes,tb])=>{
       const lab=refLabel(tci,tv,end);
-      return `<a class="chip ${votes<0?'neg':''}" style="--c:${SEC_COL(M.secof[tb])}" href="${bg(lab)}" data-src="${ref}" data-ref="${lab}" target="_blank" rel="noopener noreferrer" title="${votes} votes">${lab}<i>${votes}</i></a>`;
+      return `<a class="chip ${votes<0?'neg':''}" style="--c:${SEC_COL(M.secof[tb])}" href="${bg(lab)}" data-src="${ref}" data-ref="${lab}" data-ssp="${ci},${v},${ci},${v}" data-tsp="${tci},${tv},${end?Math.floor(end/1000):tci},${end?end%1000:tv}" target="_blank" rel="noopener noreferrer" title="${votes} votes">${lab}<i>${votes}</i></a>`;
     }).join('');
     h+=`<div class="verse ${v===st.hit?'hit':''}" id="v${v}"><div class="vref"><a href="${bg(ref)}" target="_blank" rel="noopener noreferrer">${c}:${v}</a><small><a href="${ob(ref)}" target="_blank" rel="noopener noreferrer">OpenBible ↗</a></small></div><div class="chips">${chips}</div></div>`;
   }
@@ -323,35 +323,48 @@ document.addEventListener('click',e=>{
   else if(t.id==='nextC'){showChapter(st.ci+1,0);window.scrollTo(0,0)}
   else if(t.id==='browseBtn'){$('nav').classList.toggle('open')}
 });
-// Passage viewer: a plain click on a reference shows both passages side by side (text fetched on demand from bible-api.com, public-domain translations only). Ctrl/Cmd/middle-click still opens BibleGateway.
-const verseCache=new Map(); let pv={src:'',ref:'',tr:'web'};
+// Passage viewer: a plain click on a reference shows both passages side by side. Text is fetched on demand: bible-api.com (WEB, KJV) or bolls.life (Douay-Rheims, the public-domain Catholic Bible). Copyrighted translations are not embedded; BibleGateway links cover those. Ctrl/Cmd/middle-click still opens BibleGateway.
+const verseCache=new Map(); let pv={s:null,t:null,tr:'web'};
 try{pv.tr=localStorage.getItem('pvTr')||'web'}catch(e){}
-async function fetchPassage(ref,tr){
-  const key=tr+'|'+ref; if(verseCache.has(key))return verseCache.get(key);
-  const r=await fetch(`https://bible-api.com/${encodeURIComponent(ref.replace(/–/g,"-"))}?translation=${tr}`);
+const TRANS={web:{bg:'ESV'},kjv:{bg:'ESV'},drb:{bg:'DRA',bgName:'Douay-Rheims'}};
+const spec=sp=>{const [ci,v,ec,ev]=sp.split(',').map(Number);return {ci,v,ec,ev}};
+async function fetchBolls(sp){
+  const out=[];
+  for(let c=sp.ci;c<=sp.ec;c++){
+    const key='drb|'+c; let ch=verseCache.get(key);
+    if(!ch){const b=bookOfChap[c],r=await fetch(`https://bolls.life/get-text/DRB/${b+1}/${c-M.cs[b]+1}/`);
+      if(!r.ok)throw new Error(r.status); ch=await r.json(); verseCache.set(key,ch)}
+    for(const v of ch){ if((c>sp.ci||v.verse>=sp.v)&&(c<sp.ec||v.verse<=sp.ev))out.push({n:v.verse,t:v.text.replace(/<[^>]+>/g,'').trim()}) }
+  }
+  if(!out.length)throw new Error('empty'); return out;
+}
+async function fetchPassage(label,sp,tr){
+  if(tr==='drb')return fetchBolls(sp);
+  const key=tr+'|'+label; if(verseCache.has(key))return verseCache.get(key);
+  const r=await fetch(`https://bible-api.com/${encodeURIComponent(label.replace(/–/g,"-"))}?translation=${tr}`);
   if(!r.ok)throw new Error(r.status); const j=await r.json();
   const out=j.verses.map(v=>({n:v.verse,t:v.text.trim()})); verseCache.set(key,out); return out;
 }
-function passageHTML(label,verses,multi){
+function passageHTML(verses,multi){
   return verses.map(v=>`<p>${multi?`<sup>${v.n}</sup>`:''}${v.t.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</p>`).join('');
 }
-async function openPassage(src,ref){
-  pv.src=src; pv.ref=ref; const dlg=$('pv');
-  const pane=(id,label)=>{$(id).innerHTML=`<h3>${label}</h3><div class="pvt muted">Loading…</div><a class="pvl" href="${bg(label)}" target="_blank" rel="noopener noreferrer">Open on BibleGateway ↗</a>`};
-  pane('pvA',src); pane('pvB',ref); $('pvTr').value=pv.tr;
+async function openPassage(s,t){
+  pv.s=s; pv.t=t; const dlg=$('pv'), tr=pv.tr, T=TRANS[tr]||TRANS.web;
+  const pane=(id,x)=>{$(id).innerHTML=`<h3>${x.label}</h3><div class="pvt muted">Loading…</div><a class="pvl" href="${bg(x.label,T.bg)}" target="_blank" rel="noopener noreferrer">Open on BibleGateway (${T.bgName||'ESV'}) ↗</a>`};
+  pane('pvA',s); pane('pvB',t); $('pvTr').value=tr;
   if(!dlg.open)dlg.showModal();
-  for(const [id,label] of [['pvA',src],['pvB',ref]]){
+  for(const [id,x] of [['pvA',s],['pvB',t]]){
     const box=$(id).querySelector('.pvt');
-    try{const v=await fetchPassage(label,pv.tr); if(pv.src!==src||pv.ref!==ref)return; box.classList.remove('muted'); box.innerHTML=passageHTML(label,v,v.length>1)}
-    catch(e){box.textContent='Couldn’t load this passage here. Use the BibleGateway link below.'}
+    try{const v=await fetchPassage(x.label,x.sp,tr); if(pv.s!==s||pv.t!==t||pv.tr!==tr)return; box.classList.remove('muted'); box.innerHTML=passageHTML(v,v.length>1)}
+    catch(e){if(pv.s===s&&pv.t===t&&pv.tr===tr)box.textContent='Couldn’t load this passage here. Use the BibleGateway link below.'}
   }
 }
 document.addEventListener('click',e=>{
   const a=e.target.closest('a.chip'); if(!a||!a.dataset.ref||e.ctrlKey||e.metaKey||e.shiftKey||e.button)return;
-  e.preventDefault(); openPassage(a.dataset.src,a.dataset.ref);
+  e.preventDefault(); openPassage({label:a.dataset.src,sp:spec(a.dataset.ssp)},{label:a.dataset.ref,sp:spec(a.dataset.tsp)});
 });
 document.addEventListener('change',e=>{
-  if(e.target.id==='pvTr'){pv.tr=e.target.value;try{localStorage.setItem('pvTr',pv.tr)}catch(_){}openPassage(pv.src,pv.ref);return}
+  if(e.target.id==='pvTr'){pv.tr=e.target.value;try{localStorage.setItem('pvTr',pv.tr)}catch(_){}openPassage(pv.s,pv.t);return}
 });
 document.addEventListener('change',e=>{
   const id=e.target.id;
