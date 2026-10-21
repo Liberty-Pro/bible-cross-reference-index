@@ -124,6 +124,21 @@ body{background:radial-gradient(1200px 500px at 15% -10%,color-mix(in srgb,var(-
 .card .bar{height:4px;border-radius:2px;background:var(--panel2);margin-top:10px;overflow:hidden}
 .card .bar i{display:block;height:100%;background:var(--c);border-radius:2px}
 .stats>div{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 18px}
+dialog#pv{width:min(900px,calc(100vw - 24px));max-height:88vh;overflow:auto;border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--fg);padding:18px 20px;box-shadow:0 24px 60px rgba(0,0,0,.35)}
+dialog#pv::backdrop{background:rgba(10,14,22,.55);backdrop-filter:blur(3px)}
+.pvhead{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin:0 0 14px}
+.pvhead b{font:600 22px var(--f-display);margin-right:auto}
+.pvhead label{color:var(--muted);font-size:13px}
+.pvhead select{background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:4px 6px}
+.pvgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.pvgrid section{background:var(--panel2);border-radius:10px;padding:14px 16px;border-top:4px solid var(--accent)}
+.pvgrid section+section{border-top-color:var(--s6)}
+.pvgrid h3{font:600 20px var(--f-display);margin:0 0 8px}
+.pvt{font:400 17px/1.55 var(--f-display)}
+.pvt p{margin:0 0 8px}.pvt sup{font:500 10px var(--f-mono);color:var(--muted);margin-right:4px}
+.pvt.muted{color:var(--muted)}
+.pvl{display:inline-block;margin-top:8px;font-size:12px;color:var(--muted)}
+@media (max-width:700px){.pvgrid{grid-template-columns:1fr}}
 @media (max-width:860px){.hero{padding:22px 18px 0}.hero h2{font-size:32px}.arcs{width:calc(100% + 36px);margin-inline:-18px;height:170px}}
 @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 </style>
@@ -136,6 +151,14 @@ body{background:radial-gradient(1200px 500px at 15% -10%,color-mix(in srgb,var(-
     <button class="btn" type="button" id="browseBtn">Browse</button>
   </form>
 </header>
+
+<dialog id="pv" aria-label="Passage viewer">
+  <div class="pvhead"><b>Read together</b>
+    <label>Translation <select id="pvTr"><option value="web">World English Bible</option><option value="kjv">King James Version</option></select></label>
+    <button class="btn" type="button" onclick="document.getElementById('pv').close()">Close</button></div>
+  <div class="pvgrid"><section id="pvA"></section><section id="pvB"></section></div>
+  <p class="note" style="margin:12px 0 0">Text from bible-api.com (public domain). For the ESV, use the BibleGateway links.</p>
+</dialog>
 
 <div class="wrap">
   <nav id="nav" aria-label="Books"></nav>
@@ -263,7 +286,7 @@ function renderVerses(){
     const ref=`${M.names[b]} ${c}:${v}`;
     const chips=list.map(([tci,tv,end,votes,tb])=>{
       const lab=refLabel(tci,tv,end);
-      return `<a class="chip ${votes<0?'neg':''}" style="--c:${SEC_COL(M.secof[tb])}" href="${bg(lab)}" target="_blank" rel="noopener noreferrer" title="${votes} votes">${lab}<i>${votes}</i></a>`;
+      return `<a class="chip ${votes<0?'neg':''}" style="--c:${SEC_COL(M.secof[tb])}" href="${bg(lab)}" data-src="${ref}" data-ref="${lab}" target="_blank" rel="noopener noreferrer" title="${votes} votes">${lab}<i>${votes}</i></a>`;
     }).join('');
     h+=`<div class="verse ${v===st.hit?'hit':''}" id="v${v}"><div class="vref"><a href="${bg(ref)}" target="_blank" rel="noopener noreferrer">${c}:${v}</a><small><a href="${ob(ref)}" target="_blank" rel="noopener noreferrer">OpenBible ↗</a></small></div><div class="chips">${chips}</div></div>`;
   }
@@ -299,6 +322,36 @@ document.addEventListener('click',e=>{
   else if(t.id==='prevC'){showChapter(st.ci-1,0);window.scrollTo(0,0)}
   else if(t.id==='nextC'){showChapter(st.ci+1,0);window.scrollTo(0,0)}
   else if(t.id==='browseBtn'){$('nav').classList.toggle('open')}
+});
+// Passage viewer: a plain click on a reference shows both passages side by side (text fetched on demand from bible-api.com, public-domain translations only). Ctrl/Cmd/middle-click still opens BibleGateway.
+const verseCache=new Map(); let pv={src:'',ref:'',tr:'web'};
+try{pv.tr=localStorage.getItem('pvTr')||'web'}catch(e){}
+async function fetchPassage(ref,tr){
+  const key=tr+'|'+ref; if(verseCache.has(key))return verseCache.get(key);
+  const r=await fetch(`https://bible-api.com/${encodeURIComponent(ref.replace(/–/g,"-"))}?translation=${tr}`);
+  if(!r.ok)throw new Error(r.status); const j=await r.json();
+  const out=j.verses.map(v=>({n:v.verse,t:v.text.trim()})); verseCache.set(key,out); return out;
+}
+function passageHTML(label,verses,multi){
+  return verses.map(v=>`<p>${multi?`<sup>${v.n}</sup>`:''}${v.t.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</p>`).join('');
+}
+async function openPassage(src,ref){
+  pv.src=src; pv.ref=ref; const dlg=$('pv');
+  const pane=(id,label)=>{$(id).innerHTML=`<h3>${label}</h3><div class="pvt muted">Loading…</div><a class="pvl" href="${bg(label)}" target="_blank" rel="noopener noreferrer">Open on BibleGateway ↗</a>`};
+  pane('pvA',src); pane('pvB',ref); $('pvTr').value=pv.tr;
+  if(!dlg.open)dlg.showModal();
+  for(const [id,label] of [['pvA',src],['pvB',ref]]){
+    const box=$(id).querySelector('.pvt');
+    try{const v=await fetchPassage(label,pv.tr); if(pv.src!==src||pv.ref!==ref)return; box.classList.remove('muted'); box.innerHTML=passageHTML(label,v,v.length>1)}
+    catch(e){box.textContent='Couldn’t load this passage here. Use the BibleGateway link below.'}
+  }
+}
+document.addEventListener('click',e=>{
+  const a=e.target.closest('a.chip'); if(!a||!a.dataset.ref||e.ctrlKey||e.metaKey||e.shiftKey||e.button)return;
+  e.preventDefault(); openPassage(a.dataset.src,a.dataset.ref);
+});
+document.addEventListener('change',e=>{
+  if(e.target.id==='pvTr'){pv.tr=e.target.value;try{localStorage.setItem('pvTr',pv.tr)}catch(_){}openPassage(pv.src,pv.ref);return}
 });
 document.addEventListener('change',e=>{
   const id=e.target.id;
