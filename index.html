@@ -38,6 +38,8 @@ nav{position:sticky;top:calc(env(safe-area-inset-top,0px) + 66px);max-height:cal
 .sec{margin:0 0 6px;border-bottom:1px solid var(--line)}
 .sec>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;padding:8px 2px;font-weight:600;font-size:13px;letter-spacing:.6px;text-transform:uppercase}
 .sec>summary::-webkit-details-marker{display:none}
+.sn::after{content:"▸";display:inline-block;margin-left:6px;color:var(--muted);transition:transform .15s}
+.sec[open]>summary>.sn::after{transform:rotate(90deg)}
 .dot{width:10px;height:10px;border-radius:2px;flex:none}
 .sec .n{margin-left:auto;font:400 12px var(--f-mono);color:var(--muted);letter-spacing:0}
 .books{display:flex;flex-direction:column;padding:0 0 8px 18px}
@@ -213,7 +215,7 @@ function buildNav(){
   M.secnames.forEach((sn,si)=>{
     let tot=0,items='';
     for(let b=0;b<66;b++)if(M.secof[b]===si){tot+=M.bookcnt[b];items+=`<button data-book="${b}"><span>${M.names[b]}</span><span class="n">${fmt(M.bookcnt[b])}</span></button>`;}
-    h+=`<details class="sec" ${si===0?'open':''}><summary><span class="dot" style="background:${SEC_COL(si)}"></span>${sn}<span class="n">${fmt(tot)}</span></summary><div class="books">${items}</div></details>`;
+    h+=`<details class="sec" ${si===0?'open':''}><summary><span class="dot" style="background:${SEC_COL(si)}"></span><span class="sn">${sn}</span><span class="n">${fmt(tot)}</span></summary><div class="books">${items}</div></details>`;
   });
   // Flat quick-link list of every book (in canon order), color-keyed by section, below the collapsible sections.
   let grid='';
