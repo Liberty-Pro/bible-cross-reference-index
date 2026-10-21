@@ -1,3 +1,5 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Bible Cross-Reference Index</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,500;0,6..72,600;1,6..72,500&family=Public+Sans:wght@400;500;600&display=swap">
@@ -90,7 +92,40 @@ td:first-child{font:600 13px var(--f-body)}
   .verse{grid-template-columns:minmax(0,1fr)}
   h2{font-size:28px}
 }
-@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+/* Visual polish */
+body{background:radial-gradient(1200px 500px at 15% -10%,color-mix(in srgb,var(--accent) 10%,transparent),transparent 60%),var(--bg);background-attachment:fixed}
+.top{background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.top::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:linear-gradient(90deg,var(--s0),var(--s1),var(--s2),var(--s3),var(--s4),var(--s5),var(--s6),var(--s7));opacity:.85}
+.brand{font-size:24px;display:flex;flex-direction:column}
+.search input{transition:border-color .15s,box-shadow .15s}
+.search input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
+.btn{transition:border-color .15s,transform .15s,box-shadow .15s}
+.btn:hover{transform:translateY(-1px)}
+.btn.primary:hover{box-shadow:0 4px 14px color-mix(in srgb,var(--accent) 40%,transparent)}
+.chip{transition:transform .12s,box-shadow .12s,background .12s}
+.chip:hover{transform:translateY(-1px);box-shadow:0 3px 10px color-mix(in srgb,var(--c) 28%,transparent)}
+.verse{transition:background .2s}
+.books button{transition:background .12s,padding-left .12s}
+.books button:hover{padding-left:12px}
+.filters,.tablewrap{box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.hero{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:14px;padding:30px 28px 0;margin:0 0 26px;background:linear-gradient(160deg,var(--panel),var(--panel2))}
+.hero h2{font-size:42px;max-width:18ch;margin:0 0 8px}
+.hero .sub{max-width:56ch;margin:0 0 18px}
+.hero .big{font:500 clamp(40px,7vw,64px)/1 var(--f-mono);letter-spacing:-2px;background:linear-gradient(90deg,var(--s0),var(--s2),var(--s4),var(--s6));-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero .biglab{color:var(--muted);font-size:13px;margin:4px 0 14px;letter-spacing:.4px;text-transform:uppercase}
+.arcs{display:block;width:calc(100% + 56px);margin:6px -28px 0;height:240px;opacity:0;transition:opacity .8s}
+.arcs.on{opacity:1}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;margin:0 0 28px}
+.card{--c:var(--accent);text-align:left;background:var(--panel);border:1px solid var(--line);border-top:4px solid var(--c);border-radius:10px;padding:14px 14px 12px;cursor:pointer;transition:transform .15s,box-shadow .15s}
+.card:hover{transform:translateY(-3px);box-shadow:0 8px 22px color-mix(in srgb,var(--c) 22%,transparent)}
+.card b{display:block;font:600 18px var(--f-display)}
+.card .cn{display:block;font:500 22px var(--f-mono);margin:6px 0 2px;color:var(--c);letter-spacing:-.5px}
+.card span{color:var(--muted);font-size:12px}
+.card .bar{height:4px;border-radius:2px;background:var(--panel2);margin-top:10px;overflow:hidden}
+.card .bar i{display:block;height:100%;background:var(--c);border-radius:2px}
+.stats>div{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 18px}
+@media (max-width:860px){.hero{padding:22px 18px 0}.hero h2{font-size:32px}.arcs{width:calc(100% + 36px);margin-inline:-18px;height:170px}}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 </style>
 
 <header class="top">
@@ -144,13 +179,46 @@ function showHome(){
   const head=M.secnames.map(s=>`<th>${s}</th>`).join('');
   let mx=0;M.mat.forEach(r=>r.forEach(v=>{if(v>mx)mx=v}));
   const rows=M.mat.map((r,i)=>`<tr><td><span class="dot" style="display:inline-block;margin-right:7px;background:${SEC_COL(i)}"></span>${M.secnames[i]}</td>${r.map(v=>`<td style="background:color-mix(in srgb,var(--accent) ${Math.round(v/mx*55)}%,transparent)">${fmt(v)}</td>`).join('')}</tr>`).join('');
-  $('main').innerHTML=`<h2>Every connection, by book and chapter</h2>
-  <p class="sub">Pick a book on the left, then a chapter. Each verse lists the passages it points to, strongest first. Links open the passage on BibleGateway.</p>
+  const secTot=M.secnames.map((_,si)=>{let t=0;for(let b=0;b<66;b++)if(M.secof[b]===si)t+=M.bookcnt[b];return t});
+  const secMax=Math.max(...secTot);
+  const cards=M.secnames.map((s,si)=>{const first=M.secof.indexOf(si);return `<button class="card" style="--c:${SEC_COL(si)}" data-book="${first}"><b>${s}</b><span class="cn">${fmt(secTot[si])}</span><span>references · starts at ${M.names[first]}</span><div class="bar"><i style="width:${Math.round(secTot[si]/secMax*100)}%"></i></div></button>`}).join('');
+  $('main').innerHTML=`<section class="hero"><h2>Every connection, by book and chapter</h2>
+  <div class="big">${fmt(M.total)}</div><div class="biglab">cross-references · ${fmt(M.otnt)} between Old and New Testament</div>
+  <p class="sub">Each arc below links one chapter to another, from Genesis on the left to Revelation on the right. Pick a book, then a chapter, to see every verse and the passages it points to.</p>
+  <canvas class="arcs" id="arcs" aria-label="Arc diagram of cross-references across the Bible" role="img"></canvas></section>
+  <h3 style="font:600 20px var(--f-display);margin:0 0 10px">Start reading</h3>
+  <div class="cards">${cards}</div>
   <div class="stats"><div><b>${fmt(M.total)}</b><span>cross-references</span></div><div><b>${fmt(M.otnt)}</b><span>between Old and New Testament</span></div><div><b>1,189</b><span>chapters indexed</span></div></div>
   <h3 style="font:600 20px var(--f-display);margin:0 0 10px">Where each section points</h3>
   <div class="tablewrap"><table><thead><tr><th style="text-align:left">From ↓ / To →</th>${head}</tr></thead><tbody>${rows}</tbody></table></div>
   <p class="note">Counts include every row in the data set, including 1,166 entries with negative votes (shown dimmed). The number next to each reference is its community vote score; higher means more people found the link useful. Data: OpenBible.info, CC BY 4.0.</p>`;
+  requestAnimationFrame(()=>setTimeout(drawArcs,30));
 }
+
+// Arc diagram: one curve per cross-reference (votes >= 25 to keep it legible), x = chapter position in the canon, colored by the section the arc starts in.
+function drawArcs(){
+  const cv=$('arcs'); if(!cv)return;
+  const dpr=Math.min(window.devicePixelRatio||1,2), W=cv.clientWidth, H=cv.clientHeight;
+  cv.width=W*dpr; cv.height=H*dpr;
+  const g=cv.getContext('2d'); g.scale(dpr,dpr);
+  const cs=getComputedStyle(document.documentElement), padX=12, base=H-2, xs=(W-padX*2)/1188;
+  const dark=matchMedia('(prefers-color-scheme:dark)').matches&&document.documentElement.dataset.theme!=='light'||document.documentElement.dataset.theme==='dark';
+  g.lineWidth=.6; g.globalAlpha=dark?.28:.32;
+  const paths=M.secnames.map(()=>new Path2D());
+  for(let ci=0;ci<1189;ci++){
+    const d=D[ci], si=M.secof[bookOfChap[ci]];
+    for(let i=0;i<d.length;i+=5){
+      if(d[i+4]<25)continue;
+      const t=d[i+1]; if(t===ci)continue;
+      const x1=padX+ci*xs, x2=padX+t*xs, span=Math.abs(x2-x1);
+      paths[si].moveTo(x1,base); paths[si].quadraticCurveTo((x1+x2)/2,base-span/(W-padX*2)*H*1.9,x2,base);
+    }
+  }
+  paths.forEach((p,si)=>{g.strokeStyle=cs.getPropertyValue('--s'+si).trim();g.stroke(p)});
+  cv.classList.add('on');
+}
+let _rz; addEventListener('resize',()=>{clearTimeout(_rz);_rz=setTimeout(()=>{if(st.ci===-1)drawArcs()},150)});
+matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>{if(st.ci===-1)setTimeout(drawArcs,50)});
 
 function markNav(b){
   document.querySelectorAll('.books button').forEach(x=>x.setAttribute('aria-current',String(+x.dataset.book===b)));
